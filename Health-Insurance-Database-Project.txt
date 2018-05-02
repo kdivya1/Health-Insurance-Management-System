@@ -1,0 +1,1058 @@
+﻿--FEATURE 1--
+set serveroutput on;
+
+Create sequence new_user_id
+ START WITH     40
+ INCREMENT BY   1;
+ Create or replace procedure Register_User(uname in varchar,email_id in varchar,
+ u_password in varchar,u_address in varchar ,phone_num in varchar,user_type in int,dob in date,gender in varchar,
+ cust_id in integer,relation in varchar,provider_type in varchar ) IS
+count_num integer;
+user_id_num integer;
+Begin
+user_id_num := 0;
+Select count(email) into count_num from users where email=email_id;
+If(count_num=0 and user_type = 1)then
+user_id_num := new_user_id.nextval;
+Insert into users values(user_id_num,uname,email_id,u_password,u_address,phone_num,user_type); commit;
+insert into customer values (user_id_num,dob,gender); commit;
+Dbms_output.put_line('New User Id is :' || new_user_id.currval);
+else if (count_num=0 and user_type = 2) then
+user_id_num := new_user_id.nextval;
+Insert into users values(user_id_num,uname,email_id,u_password,u_address,phone_num,user_type); commit;
+insert into dependent values (user_id_num,cust_id,dob,gender,relation); commit;
+Dbms_output.put_line('New User Id is :' || new_user_id.currval);
+else if(count_num=0 and user_type = 3) then
+user_id_num := new_user_id.nextval;
+Insert into users values(user_id_num,uname,email_id,u_password,u_address,phone_num,user_type); commit;
+insert into service_provider values(user_id_num,provider_type); commit;
+Dbms_output.put_line('New User Id is :' || new_user_id.currval);
+--customer_details(new_user_id.curval);
+Else
+Dbms_output.put_line('Account with same emailid already exists');
+end if;
+end if;
+end if;
+--Dbms_output.put_line('New User Id is :' || user_id_num);
+End;
+
+--Test data--
+exec Register_User('Dave','dave@gmail.com','abcd1234','old fredrick road,MD','301-234-3432',2,date'2001-1-1','female', 4,'Spouse','In-network');
+exec Register_User('Anna','Anna@gmail.com','abcd1234','old fredrick road,MD','301-234-3432',2,date'2001-1-1','female', 4,'Spouse','In-network');
+select * from dependent;
+
+--FEATURE 2--
+Set SERVEROUTPUT ON;
+Create or replace function UserLogin (email_id in varchar,u_password in varchar)
+return int
+as
+counter integer;
+BEGIN
+select count(*) into counter from users where email=email_id and password = u_password;
+if counter = 0 then
+return 0;
+--dbms_output.put_line('User Login Failed');
+--return 0;
+elsif counter =1 then
+return 1;
+--dbms_output.put_line('User Login Successfull');
+else
+    return 'Too many matches, this should never happen!';
+END if;
+END;
+
+--Test data for successful login--
+declare
+result1 number;
+Begin
+	result1 := UserLogin('Anna@gmail.com','anna1234');
+	if result1 = 0 then	dbms_output.put_line('Unsuccessful login');
+	else	dbms_output.put_line('Login Successful');	
+	end if;
+End;
+--Test data for unsuccessful login--
+
+declare
+result1 number;
+Begin
+	result1 := UserLogin('Abcd@gmail.com','abcd1234');
+	if result1 = 0 then	dbms_output.put_line('Unsuccessful login');
+	else	dbms_output.put_line('Login Successful');	
+	end if;
+End;
+
+
+--FEATURE 3--
+
+create or replace procedure ReadMessages(user_id in integer,u_startdate in date) 
+is
+cursor c1 is
+ select userid,messagedate,messagebody
+ from  message m 
+ where userid = user_id
+and m.messagedate >= u_startdate ;
+   u_id message.userid%type;
+   m_date message.messagedate%type;
+   m_body message.messagebody%type;
+begin
+ open c1;
+ loop
+ fetch c1 into u_id,m_date,m_body;
+ exit when c1%NOTFOUND;
+ dbms_output.put_line('user id: '|| u_id||'  message date: '||m_date||'  message: '||m_body);
+ end loop; 
+ 
+ close c1;
+dbms_output.put_line (' No more record for the user ID and date');
+end ;
+
+--Test data--
+Exec READMESSAGES(1,date'2016-1-1');
+Exec READMESSAGES(4,date'2016-01-1');
+select * from message;
+
+-----FEATURE 4---
+set Serveroutput On;
+Create or replace type did_list as varray(6) of int;
+Create sequence new_policy_id
+ START WITH     40
+ INCREMENT BY   1;
+ Create sequence new_mess_id
+ START WITH     1010
+ INCREMENT BY   1;
+ 
+
+--feature starts--
+create or replace procedure add_policy(cust_id in integer,deptList in did_list,
+plan_year in integer,plan_id in integer)
+as
+x int;
+d_adult int;
+d_child int;
+rel1 dependent.relationship%type;
+begin
+d_adult:=0;
+d_child:=0;
+x:=0;
+for i in 1..deptlist.count loop
+if deptlist(1)=0 or deptlist(1) is null
+then
+x:=1;
+else
+select relationship into rel1 from dependent where did=deptlist(i);
+if rel1='Spouse'
+then
+d_adult:=d_adult+1;
+end if;
+if
+rel1='Child'
+then
+d_child:=d_child+1;
+end if;
+end if;
+end loop;
+if d_adult=1 and d_child=0
+then
+dbms_output.put_line('2 adult level 2');
+insert into policy(POLICYID,PLANID,CUSTID,PLANLEVEL) values (new_policy_id.nextval,plan_id,cust_id,2);
+insert into message values (new_mess_id.nextval,cust_id,sysdate,
+('Customer has been enrolled to new policy '||new_policy_id.currval));
+else if
+d_adult=0 and d_child >0
+then
+dbms_output.put_line('1 adult + children level 3');
+insert into policy(POLICYID,PLANID,CUSTID,PLANLEVEL) values (new_policy_id.nextval,plan_id,cust_id,3);
+insert into message values (new_mess_id.nextval,cust_id,sysdate,
+('Customer has been enrolled to new policy '||new_policy_id.currval));
+else if d_adult=1 and d_child >0
+then
+dbms_output.put_line('2 adult + children level 4');
+insert into policy(POLICYID,PLANID,CUSTID,PLANLEVEL) values (new_policy_id.nextval,plan_id,cust_id,4);
+insert into message values (new_mess_id.nextval,cust_id,sysdate,
+('Customer has been enrolled to new policy '||new_policy_id.currval));
+else if x=1 then
+dbms_output.put_line('1 adult level 1');
+insert into policy(POLICYID,PLANID,CUSTID,PLANLEVEL) values (new_policy_id.nextval,plan_id,cust_id,1);
+insert into message values (new_mess_id.nextval,cust_id,sysdate,
+('Customer has been enrolled to new policy '||new_policy_id.currval));
+end if;
+end if;
+end if;
+end if;
+exception
+when no_data_found then
+dbms_output.put_line('incorrect data input');
+end;
+
+--test data for level 1--
+exec add_policy(4,did_list(0),2017,2);
+--test data for level 4--
+exec add_policy(3,did_list(6,7),2017,2);
+--incorrect data--
+exec add_policy(1,did_list(5,8),2017,1);
+--test data for level 3--
+exec add_policy(1,did_list(7,8),2017,1);
+select * from message;
+select * from users;
+select * from dependent;
+
+--feature 5--
+create or replace procedure add_dependent(p_policyid in number,p_did in number) is
+v1_policyid policy_dependent.policyid%type;
+v1_did policy_dependent.did%type;
+begin
+v1_did:=0;
+--checking if user has a dependent in the policy already
+select count(*) into v1_did from policy_dependent where  did=p_did and policyid=p_policyid;
+if v1_did <> 0 then
+dbms_output.put_line(p_did||' is already in policy '||p_policyid);
+else
+--if the user has no dependent
+insert into policy_dependent values(p_policyid,p_did,0);
+insert into message values(new_mess_id.nextval,p_did,sysdate,'dependent is added to policy');
+update policy set members=members+1 where policyid=p_policyid;
+dbms_output.put_line('dependent added to the policy');
+commit;
+end if;
+end;
+
+--test data--
+exec add_dependent(2,8);
+exec add_dependent(3,9);
+select * from policy_dependent;
+select * from message;
+
+--Feature 6--
+
+
+create or replace procedure remove_dependent(p_dname in varchar,p_policyid in int) as
+v_dname users.username%type;
+v_policyid policy.policyid%type;
+v_did policy_dependent.did%type;
+begin
+select pd.did,username,pd.policyid into v_did,v_dname,v_policyid
+from users u,policy_dependent pd where
+username=p_dname and u.userid=pd.did;
+--if dependent is in the policy do the following code
+if v_dname is not null then
+delete from POLICY_DEPENDENT where did=v_did;
+insert into message values(new_mess_id.nextval,v_did,sysdate,'dependent removed');
+else
+--if the dependent not in the policy do the following code
+dbms_output.put_line('dependent not in the policy');
+end if;
+exception
+when no_data_found then
+dbms_output.put_line('no data is found');
+when too_many_rows then
+dbms_output.put_line('too many rows');
+end;
+
+
+--test data for no data--
+exec REMOVE_DEPENDENT('Divya',1);
+--test data for removing--
+exec REMOVE_DEPENDENT('Bob',1);
+select * from policy;
+select * from users;
+select * from policy_dependent;
+
+--Feature 7--
+
+create or replace function compute_premium(p_policyid in int) 
+return INTEGER
+is
+v_planlevel number;
+v_child number;
+v_adult number;
+v_relation varchar(10);
+v_did number;
+v_planid number;
+v_premium number;
+cursor c1 is
+select did from policy_dependent where policyid=p_policyid;
+begin
+v_adult:=1;
+v_child:=0;
+open c1;
+  loop
+   fetch c1 into v_did;
+   exit when c1%notfound;
+   --selecting relationship of dependent with the policy holder
+   select relationship into v_relation from dependent where did=v_did;
+  if v_relation='Spouse' then
+  v_adult:=v_adult+1;
+  elsif v_relation ='Child' then
+  v_child:=v_child+1;
+
+end if;
+end loop;
+  --computing the premium based on the dependents
+  if v_adult=1 and v_child=0 then v_planlevel:=1;
+  elsif v_adult=2 and v_child=0 then v_planlevel:=2;
+  elsif (v_adult=1 and v_child=1) or  (v_adult=1 and v_child>1) then v_planlevel:=3;
+  elsif (v_adult=2 and v_child=1) or  (v_adult=2 and v_child>1) then v_planlevel:=4;
+end if; 
+ select planid into v_planid from policy where policyid=p_policyid;
+ select rate into v_premium from premium where planid=v_planid and planlevel=v_planlevel;
+
+return v_premium;
+
+  end;
+
+--test data 1--
+  declare
+e_premium number;
+Begin
+	e_premium := compute_premium(2);
+	if e_premium > 0 then	dbms_output.put_line('the premium is '||e_premium);
+	else	dbms_output.put_line('no data found');	
+	end if;
+End;
+--test data 2--
+  declare
+e_premium number;
+Begin
+	e_premium := compute_premium(3);
+	if e_premium > 0 then	dbms_output.put_line('the premium is '||e_premium);
+	else	dbms_output.put_line('no data found');	
+	end if;
+End;
+
+--feature 8--
+
+create or replace procedure compute_coverage(p_policyid in int,p_string  in varchar) is
+v_max_service coverage.max_service%type;
+v_allowed_charge coverage.allowed_charge%type;
+v_in_copay coverage.in_copay%type;
+v_in_coinsurance coverage.in_coinsurance%type;
+v_out_copay coverage.out_copay%type;
+v_out_coinsurance coverage.out_coinsurance%type;
+begin
+--selecting the data if the coverage is included in the policy
+select max_service,allowed_charge,in_copay,in_coinsurance,out_copay,out_coinsurance into
+v_max_service, v_allowed_charge,v_in_copay,v_in_coinsurance,v_out_copay, v_out_coinsurance
+from coverage c,policy p,service s
+where  c.planid=p.planid and c.sid =(select sid from service where description like '%'||p_string||'%') and policyid=p_policyid and c.sid=s.sid;
+dbms_output.put_line('Maximum allowed services are '||v_max_service);
+dbms_output.put_line('Allowed charge for the coverage is '||v_allowed_charge);
+dbms_output.put_line('Innetwork copay is '||v_in_copay);
+dbms_output.put_line('Innetwork coinsurance for the coverage is '||v_in_coinsurance);
+
+dbms_output.put_line('Outnetwork copay is '||v_out_copay);
+
+dbms_output.put_line('Outnetwork coinsurance for the coverage is '|| v_out_coinsurance );
+exception 
+when no_Data_found then
+--if coverage is not included in the policy
+dbms_output.put_line('Coverage is not included in the policy');
+end;
+
+--test for data--
+set serveroutput on;
+exec compute_coverage(1,'Blood');
+--test for no data--
+set serveroutput on;
+exec compute_coverage(2,'Blood');
+
+--Feature 9--
+
+Create or replace type servicelist as varray(10) of varchar(50);
+Create or replace type servicecharge as varray(10) of number;
+Create or replace type claimnum as varray(10) of number;
+Create sequence new_detail
+ START WITH     40
+ INCREMENT BY   1;
+ Create sequence new_claim_id
+ START WITH     40
+ INCREMENT BY   1;
+ 
+ 
+set serveroutput on;
+
+create or replace procedure submit_claim(s_pid in int,p_id in int,c_name in varchar,
+s_date in date,s_id servicelist,s_charge servicecharge)
+as
+cnum claimnum ;--to store the claim id of given user for given policy, for given year,and given service provider
+cnum1 claimnum;-- to store the claim ids of given user for given policy,for same date  and given service provider
+a int;--counter variable to check if the service provider is valid
+b int;--counter to check if the policy is valid or not
+c int;--counter to check if the patient hold the given policy or not
+d int;--counter to check if the service used is in the plan year
+s int;--to store the maximum limit of the service
+uid int;--to store the user id
+num1 int;
+num2 int;
+sum1 int;
+sum2 int;
+ v_allowed_charge int;
+ v_adjust int;
+ tot_ded int;
+ ded_paid int;
+rem_ded int;
+left_charge int;
+v_sptype varchar(15);
+v_cust int;
+v_family int;
+max_family int;
+max_member int;
+min_1 int;
+u_type int;
+v_in_copay int;
+v_out_copay int;
+min_2 int;
+v_in_coin number;
+v_out_coin number;
+t_cust int;
+descrip varchar(50);
+left_ded int;
+policy_ded int;
+plan_ded int;
+begin
+num1:=0;
+num2:=0;
+
+select userid into uid from users where username=c_name;
+--to check if the service provider exist or not
+select count(*) into a from service_provider where spid=s_pid;
+  if a <=0
+  then 
+dbms_output.put_line('service provider does not exist');
+insert into message values(new_mess_id.nextval,uid,sysdate,'Claim denied as service provider doesnot exist');
+
+else if a>0
+then
+dbms_output.put_line('service provider exist');
+select sptype into v_sptype from service_provider where spid=s_pid; 
+select count(*) into b from policy
+where policyid=p_id;
+--to check if the policy exist or not
+if b<=0
+then
+dbms_output.put_line('Policy does not exist');
+insert into message values(new_mess_id.nextval,uid,sysdate,'Claim denied as policy doesnot exist');
+else if b>0
+then
+dbms_output.put_line('policy exist');
+select usertype into u_type from users where userid=uid;
+if u_type=1 then 
+select count(*) into c from users c, policy p
+where c.userid = p.custid and c.username=c_name and p.policyid=p_id;
+ else if u_type=2 then 
+ select count(*) into c from users c, policy_dependent p
+where c.userid = p.did and c.username=c_name and p.policyid=p_id;
+end if;
+end if;
+--to check if the patient hold the policy or not
+if c<=0 
+then
+dbms_output.put_line('Patient does not hold this policy');
+insert into message values(new_mess_id.nextval,uid,sysdate,'Claim denied as patient does not hold this policy');
+else if c>0
+then
+dbms_output.put_line('Patient hold this policy');
+select count(*) into d
+from plan p
+where
+p.planyear=extract(year from s_date);
+--to check if the service date is in the plan year or not
+if d<=0 
+then
+dbms_output.put_line('service date is in plan year');
+insert into message values(new_mess_id.nextval,uid,sysdate,'Claim denied as service date is not in plan year');
+else if d>0
+then
+dbms_output.put_line('service in plan year');
+dbms_output.put_line('valid claim');
+--checking for all the services if they have reached the maximum limit
+for i in 1..s_id.count
+loop
+sum1:=0;
+sum2:=0;
+select c.max_service into s from coverage c, policy p
+where c.planid=p.planid and c.sid=s_id(i)and p.custid=uid and p.policyid=p_id ;
+dbms_output.put_line('sevice covered');
+dbms_output.put_line('max limit '||s);
+--selecting all the claim id for a given year,policy id,user id and service provider
+select claimid bulk collect into cnum from claim c where c.spid=s_pid and userid=uid and c.policyid=p_id and 
+extract (year from c.service_date)=extract (year from s_date);
+if cnum is not null then
+for k in 1..cnum.count loop
+--dbms_output.put_line('claim id : '||cnum(k));
+--counting all the claimids for the given service id 
+select count(*)into num1 from claim_detail d 
+where cnum(k)=claimid and sid=s_id(i) and  status=2 ;
+sum1:=sum1+num1;
+--dbms_output.put_line('count of service '||sum1);
+end loop;
+dbms_output.put_line('count of service '||sum1);
+--checking if it has reached the max limit
+if sum1>=s
+then
+dbms_output.put_line(sum1);
+dbms_output.put_line('service id that exceeded the max limit: '||s_id(i));
+insert into message values(new_mess_id.nextval,uid,sysdate,'service denied as service exceed the maximal limit');
+
+else
+--end if;
+--end if;
+--selecting the claimids which for a given service,policy,user,seri=vice provider which are used on same date to find the duplicate claim
+select claimid bulk collect into cnum1 from claim c where c.spid=s_pid and userid=uid and c.policyid=p_id and 
+ c.service_date= s_date;
+ if cnum1 is not null then
+for m in 1..cnum1.count loop
+--dbms_output.put_line(' claim id '|| cnum1(m));
+select count(*)into num2 from claim_detail d 
+where cnum(m)=claimid and sid=s_id(i) and status=1;
+sum2:=sum2+num2;
+end loop;
+if sum2>1
+then
+dbms_output.put_line('no of duplicate claims'|| sum2);
+insert into message values(new_mess_id.nextval,uid,sysdate,'service rejected as it is duplicate claim');
+end if;
+end if;
+for j in i..s_charge.count loop
+if j=i then
+select allowed_charge into v_allowed_charge from coverage c ,policy po ,plan pl where po.policyid=p_id and po.planid=pl.planid and c.planid=pl.planid
+and c.sid=s_id(i);
+dbms_output.put_line('The allowed charge for service is '|| v_allowed_charge);
+ if  v_allowed_charge<s_charge(j) then
+Dbms_Output.Put_line('allowed charge is less ');
+v_adjust:= v_allowed_charge;
+ else 
+Dbms_Output.Put_line('provider charge is less ');
+v_adjust:=s_charge(j);
+end if;
+Dbms_Output.Put_line('the adjusted charge is '||v_adjust);
+--calculating deductable paid so far
+select deductible into ded_paid from policy where policyid= p_id;
+select deductible into tot_ded from plan where planid in ( select planid from policy where policyid=p_id);
+rem_ded:=tot_ded-ded_paid;
+dbms_output.put_line('remaining deductible: '|| rem_ded);
+if rem_ded >0
+then
+   if v_adjust> rem_ded
+   then
+   v_adjust:= v_adjust-rem_ded;
+    dbms_output.put_line('patient should pay first this  : '||rem_ded);
+    update policy set deductible=deductible+rem_ded where policyid=p_id;
+    select p.deductible into plan_ded from plan p ,policy po where p.planid=po.planid and po.policyid=p_id;
+    select deductible into policy_ded from policy where policyid=p_id;
+    left_ded:= plan_ded-policy_ded;
+    dbms_output.put_line('remaining deductible  : '||left_ded);
+    commit;
+     dbms_output.put_line('charge left  : '||v_adjust);
+   else 
+--v_adjust:=v_adjust;
+    dbms_output.put_line('patient should pay first  : '||v_adjust);
+    update policy set deductible = deductible+v_adjust where policyid=p_id;
+     select p.deductible into plan_ded from plan p ,policy po where p.planid=po.planid and po.policyid=p_id;
+    select deductible into policy_ded from policy where policyid=p_id;
+    left_ded:= plan_ded-policy_ded;
+    dbms_output.put_line('remaining deductible  : '||left_ded);
+    commit;
+    end if;
+else 
+--remain_ded=0
+   select outpocket_family into v_family  from policy where policyid=p_id;
+   select max_pocket_family into max_family from plan where planid=
+   (select planid from policy where policyid=p_id);
+   select outpocket_cust into v_cust  from policy where policyid=p_id;
+   select max_pocket_member into max_member from plan where planid=
+   (select planid from policy where policyid=p_id);
+   insert into temp values(max_family-v_family);
+   insert into temp values(max_member-v_cust);
+   insert into temp values(v_adjust);
+   select in_copay,out_copay into v_in_copay,v_out_copay
+   from coverage where sid=s_id(i) and
+   planid=(select planid from policy where policyid=p_id);
+   if(v_sptype='In-network') then
+           insert into temp values(v_in_copay);
+  else 
+  insert into temp values(v_out_copay);
+  end if;
+  select min(data1) into min_1 from temp;
+  dbms_output.put_line('patient should pay..... '||min_1);
+  t_cust:=min_1+rem_ded;
+  commit;
+  delete from temp;
+   v_adjust:= v_adjust-min_1;
+    
+    insert into temp values(max_family-v_family);
+   insert into temp values(max_member-v_cust);
+   insert into temp values(v_adjust);
+   select in_coinsurance,out_coinsurance into v_in_coin,v_out_coin
+   from coverage where sid=s_id(i) and
+   planid=(select planid from policy where policyid=p_id);
+   
+   if(v_sptype='In-network') then
+   dbms_output.put_line('v_coin '|| v_in_coin);
+           insert into temp values(v_in_coin*v_adjust);
+  else 
+  insert into temp values(v_out_coin*v_adjust);
+  end if;
+  select min(data1) into min_2 from temp;
+  dbms_output.put_line('patient should pay..... '||min_2);
+  v_adjust:= v_adjust-min_2;
+  t_cust:= t_cust+ min_2;
+  dbms_output.put_line('insurance company should pay: '|| v_adjust);
+  commit;
+  delete from temp;
+  select description into descrip from service where sid= s_id(i);
+
+end if;
+end if;
+insert into claim values(new_claim_id.nextval,s_pid,s_date,0,0,uid,p_id);
+  insert into claim_detail values (new_detail.nextval,new_claim_id.Currval,s_id(i),2,s_charge(j),rem_ded,v_in_copay,v_in_coin,t_cust,v_adjust);
+  insert into message values(new_mess_id.nextval,uid,sysdate,('service id: '|| s_id(i)||' service description: '||
+  descrip ||' providers charge: '||
+  s_charge(j)||' Allowed charge: '||v_allowed_charge||' amount of copay: '||v_in_copay||' amount of deductable : '|| left_ded||
+  ' amount of co-insurance: '||v_in_coin||' Amount paid by customer : '|| t_cust||' amount paid by insurance: '||v_adjust ));
+--inserted into message table stating the service ID and
+--service description, provider’s charge, allowed charge,
+--amount of co-pay, amount of deductible (if customer has not reach deductible yet),
+--amount of co-insurance, amount paid by insurance, amount paid by customer.
+--end if;
+--end if;
+commit;
+end loop;
+end if;
+end if;
+end loop;
+end if;
+end if;
+end if;
+end if;
+end if;
+end if;
+end if;
+end if;
+end;
+
+--test data for new claim submmition--
+
+exec submit_claim(11,1,'Anna',date'2015-09-23',servicelist(1,3),servicecharge(120,50));
+
+--test sample for testing the service provider is valid or not--
+set serveroutput on;
+exec submit_claim(1,1,'Anna',date'2015-09-23',servicelist(1,3),servicecharge(120,50));
+
+
+--test sample to check if the customer is not enrolled in that policy--
+set serveroutput on;
+exec submit_claim(11,2,'Anna',date'2015-09-23',servicelist(1,3),servicecharge(120,50));
+
+
+--Feature 10--
+set serveroutput on;
+create or replace procedure SearchClaim(u_id in number,u_type in number, sDate in date, eDate in date)
+AS
+cursor c1 IS
+select c.claimid,u.username,c.spid,c.service_date
+from claim c, users u
+where
+u.USERTYPE=u_type and u.USERID=c.USERID and 
+ c.userid=u_id and c.service_date between  sDate and  eDate;
+cid CLAIM.CLAIMID%type;
+name users.username%type;
+s_pid claim.spid%type;
+s_date claim.service_date%type;
+begin
+open c1;
+LOOP
+Fetch c1 into cid,name,s_pid, s_date;
+Exit when c1%notfound;
+ dbms_output.put_line('Claim ID: '|| cid||', User: '||name||', Service provider id: '||s_pid||', Claimed on: '||s_date);	
+END LOOP;
+CLOSE c1;
+END;
+--test data--
+exec SearchClaim(1,1, date'2011-01-01', date'2012-03-30');
+exec SearchClaim(2,1, date'2011-01-01', date'2013-03-30');
+
+--Feature 11--
+create or replace procedure DetailClaim(cid in number) AS
+x claim%rowtype;
+y claim_detail%rowtype;
+BEGIN
+select * into x from claim where claimid = cid;
+select * into y from claim_detail where claimid=cid;
+if x.claimid is not null then
+  dbms_output.put_line('Claim ID:'||x.claimid||' Service Provider:'||x.spid||' Service date:'||x.service_date||' total charge paid by customer: '
+  ||x.total_charge_insurance||' userid: '||x.userid||' Policy id:'|| x.policyid);
+  dbms_output.put_line('Claim ID:'||y.claimid||' Service id:'|| y.sid||' Status: '||y.status||' Providers charge: '||y.provider_charge||
+  ' deductible :'|| y.deductible||' Copay: '|| y.copay||' coinsurance: '||y.coinsurance||' Amount patient pay: '|| y.amount_patient||
+  ' Amount insurance pay: '||y.amount_insurance);
+else
+  raise no_data_found;
+END IF;
+EXCEPTION
+when no_data_found then
+  dbms_output.put_line('No such claim ID found! Please retry with a different claim ID.');
+END;
+
+--test no data--
+exec DetailClaim(2);
+--test data--
+exec DetailClaim(1);
+
+--Feature 12--
+
+create or replace procedure total_amount(userid in number) AS
+cursor c1 IS select sum(c.total_charge_cust), sum(cd.deductible), sum(cd.copay),sum(cd.coinsurance),sum(p.outpocket_cust),sum(p.outpocket_family),c.userid, EXTRACT(year from c.service_date)
+from claim c, claim_detail cd, policy p
+where c.claimid = cd.claimid and cd.status = 2 and p.policyid = c.policyid
+group by c.userid, EXTRACT(year from c.service_date);
+total_charge_cust claim.total_charge_cust%type;
+deductible claim_detail.deductible%type;
+copay claim_detail.copay%type;
+coinsurance claim_detail.coinsurance%type;
+outpocket_cust policy.outpocket_cust%type;
+outpocket_family policy.outpocket_family%type;
+uid number;
+yr number;
+
+BEGIN
+
+OPEN c1;
+
+LOOP
+fetch c1 into total_charge_cust,deductible,copay,coinsurance,outpocket_cust,outpocket_family,uid,yr;
+exit when c1%notfound;
+
+if total_charge_cust is not null then 
+	dbms_output.put_line('For the plan year, user ID '||userid||' in total charge '||total_charge_cust||', total deductible = '||deductible||', total copay = '||copay||', total coinsurance = '||coinsurance||', total out of pocket pm = '||outpocket_cust||', total out of pocket pm = '||outpocket_family||'.');		
+else 
+	raise no_data_found;
+dbms_output.put_line('There are no payments for the plan year');
+END IF;
+END LOOP;
+
+
+CLOSE c1;
+	
+
+EXCEPTION
+when no_data_found then
+DBMS_OUTPUT.PUT_LINE('exception: Payments of '||userid||' not available -or- User id '||userid||' doesnt exist');
+
+END;
+exec total_amount(1);
+
+
+--feature 13--
+set serveroutput on;
+CREATE OR REPLACE Procedure GetTotalNum(start_date date)
+is 
+ Cursor c1 is
+ --cursor to get the total number of policies per year for past 5 years
+SELECT  count(*), a.planyear
+    FROM policy p, plan a
+    where p.planid=a.planid and a.planyear>=( 
+    select extract(year from start_date)from dual)-5
+    group by a.planyear;
+  
+  Cursor c2 is
+  --cursor to get the total number of claims per year for past 5 years
+SELECT count(*),extract(year from service_date)
+   -- into total_claims,pyear
+    FROM claim
+    where extract(year from service_date)>=
+    (select extract(year from start_date)from dual)-5
+    group by extract(year from service_date);
+    
+    cursor c3 is
+    --total amount of premium received per year from past 5 years
+SELECT sum(rate),a.planyear 
+    FROM premium p,policy c, plan a 
+     WHERE c.planid=p.planid and c.planlevel=p.planlevel and p.planid=a.planid
+   and a.planyear>=(select extract(year from start_date)from dual)-5
+   group by a.planyear;
+   cursor c4 is
+   --total amount paid by patients per year for past 5 year
+SELECT sum(amount_patient),extract(year from c.service_date)
+ FROM claim_detail d,claim c
+     WHERE d.claimid=c.claimid and status=2
+     and  extract(year from c.service_date)>=(select extract(year from start_date)from dual)-5
+  group by extract(year from c.SERVICE_DATE);
+  Cursor c5 is
+   --total amount paid by insurance per year for past 5 year
+SELECT sum(amount_insurance),extract(year from c.service_date) 
+    FROM claim_detail d,claim c
+     WHERE d.claimid=c.claimid and status=2
+     and  extract(year from c.service_date)>=(select extract(year from start_date)from dual)-5
+  group by extract(year from c.SERVICE_DATE);
+  cursor c6 is
+  SELECT COUNT(*)
+    FROM customer;
+cursor c7 is
+--total number of In-network service provider
+SELECT COUNT(*) 
+    FROM service_provider
+    WHERE sptype='In-network';  
+ total_cust int;
+ total_inserv int;
+total_paidinsur number;
+  pyear4 int;
+  total_policies int;
+total_claims int;
+total_premium int;
+total_paidpatient int;
+pyear3 int;
+pyear2 int;
+pyear int;
+pyear1 int;
+begin
+Open c1;
+loop
+	fetch c1 into total_policies,pyear;
+  exit when c1%notfound;
+  dbms_output.put_line('total number of policies per year for last 5 years: '||total_policies||' for year '||pyear);
+  end loop;
+  close c1;
+  open c2;
+  loop
+  fetch c2 into total_claims,pyear1;
+  exit when c2%notfound;
+  dbms_output.put_line('total number of claims per year for last 5 years: '||total_claims||' for year '||pyear1);
+  End loop;
+close c2;
+open c3;
+loop
+fetch c3 into total_premium, pyear2;
+exit when c3%notfound;
+dbms_output.put_line('The total number of premium received per year for past 5 years :'|| total_premium ||' for year :'||pyear2);
+end loop;
+close c3;
+open c4;
+loop
+fetch c4 into total_paidpatient, pyear3;
+exit when c4%notfound;
+dbms_output.put_line('The total amount paid by patients per year for past 5 years :'|| total_paidpatient||' for year :'||pyear3);
+end loop;
+close c4;
+open c5;
+loop
+fetch c5 into total_paidinsur, pyear4;
+exit when c5%notfound;
+dbms_output.put_line('The total amount paid by insurance per year for past 5 years :'|| total_paidinsur||' for year :'||pyear4);
+end loop;
+close c5;
+open c6;
+loop
+fetch c6 into total_cust;
+exit when c6%notfound;
+dbms_output.put_line('The total number of customers :' ||' '|| total_cust);
+end loop;
+close c6;
+open c7;
+loop
+fetch c7 into total_inserv;
+exit when c7%notfound;
+dbms_output.put_line('The total number of In-Network service provider :' ||' '|| total_inserv);
+end loop;
+close c7;
+end;
+
+--test data--
+exec GetTotalNum(sysdate);
+
+--Feature 14--
+create table percentage_patients(year number,percent_value number);
+
+create or replace procedure number_of_serv(date1 int,date2 int,p_year in int,k in int,p1_year in int)
+as
+cursor c1 is
+select count(distinct sid),extract(year from service_date) 
+from claim c,claim_detail cd 
+where c.claimid=cd.claimid
+group by
+extract(year from service_date) 
+having extract(year from service_date)>=date1 and extract(year from service_date)<=date2 ;
+var1 int;
+var2 int;
+v_year plan.planyear%type;
+num int;
+den int;
+cursor c2 is
+select cd.sid,description,extract(year from service_date)
+from claim c,claim_detail cd,service s 
+where c.claimid=cd.claimid and s.sid=cd.sid and status=2
+group by
+extract(year from service_date),cd.sid,description
+having extract(year from service_date)>=2012 and extract(year from service_date)<=2017 
+order by count(c.claimid) desc;
+lv_sid service.sid%type;
+lv_desc service.description%type;
+lv_year number;
+v1_year plan.planyear%type;
+num1 int;
+den1 int;
+max_val int;
+max_year int;
+cursor c3 is
+select  percent_value,year into max_val,max_year 
+from percentage_patients
+where percent_value=(select max(percent_value) from percentage_patients);
+
+
+begin
+open c1;
+--Calculate the number of services appeared in claims each year  
+  loop
+      fetch c1 into var1,var2;
+      exit when c1%notfound;
+      dbms_output.put_line(var1||'     '||var2);
+  end loop;
+ --calculate the percentage of patients (customers and their dependents). 
+  
+  for i in p_year-5..p_year loop
+  begin
+  select extract(year from service_date),count(distinct userid),
+  (select sum(members) 
+  from plan pl,policy po 
+  where pl.planid=po.policyid
+  group by 
+  planyear having planyear=i) as total_members
+  into v_year,num1,den1
+  from claim c,policy po,plan pl
+  where c.policyid=po.policyid and pl.planid=po.planid 
+  group by 
+  extract(year from service_date) having extract(year from service_date)=i;
+
+  dbms_output.put_line('the percentage of patients for '||v_year||' is '||(num1/den1*100));
+
+  exception 
+  when no_data_found 
+  then
+  continue;
+  end;
+end loop;
+--Please also identify the top K (K as an integer input) services with the most claims in each year in the past 5 years
+open c2;
+   loop
+     fetch  c2 into lv_sid,lv_desc,lv_year;
+     exit when  c2%notfound or c2%rowcount>k;
+     dbms_output.put_line('output is   '||lv_sid||'        '||lv_desc||'        '||lv_year);
+  end loop;
+close c1;
+  --calculate the highest percentage of patients each year in past 5 years. 
+  delete from percentage_patients;
+for i in p1_year-5..p1_year loop
+  begin
+  select extract(year from service_date),count(distinct userid),
+  (select sum(members) 
+  from plan pl,policy po 
+  where pl.planid=po.policyid
+  group by 
+  planyear having planyear=i) as total_members
+  into v1_year,num,den
+  from claim c,policy po,plan pl
+  where c.policyid=po.policyid and pl.planid=po.planid 
+  group by 
+  extract(year from service_date) having extract(year from service_date)=i;
+
+  insert into percentage_patients values (v1_year,(num/den*100));
+
+  exception 
+  when no_data_found 
+  then
+  continue;
+  end;
+end loop;
+
+open c3;
+ loop
+  fetch c3 into max_val,max_year;
+  exit when c3%notfound;
+dbms_output.put_line('Maximum percentage of patients in past 5 years is '||max_val||' in year'||max_year );
+ end loop;
+ close c3;
+  
+  end;
+
+  
+  
+  
+  --test--
+  
+set serveroutput on;  
+exec number_of_serv(2012,2017,2017,3,2017);
+
+
+--Feature 15--
+
+drop view user_claim_view;
+
+create view user_claim_view as
+select userid, sum(total_charge_insurance) sum_charge_insurance, avg(total_charge_insurance) avg_charge_insurance, extract(year from service_date) service_year
+from claim
+group by userid, extract(year from service_date);
+
+
+drop view sp_claim_view;
+
+create view sp_claim_view as
+select spid, sum(total_charge_insurance) sum_charge_insurance,
+avg(total_charge_insurance) avg_charge_insurance, extract(year from service_date) service_year
+from claim
+group by spid, extract(year from service_date);
+
+
+
+create or replace procedure fraud_user(threshold in int, userorsp in int)
+as
+cursor f_cursor is
+select c1.userid, c2.SUM_CHARGE_INSURANCE-c1.SUM_CHARGE_INSURANCE  diff_sum_insurance, c2.AVG_CHARGE_INSURANCE-c1.AVG_CHARGE_INSURANCE  diff_avg_insurance, c1.service_year sy1, c2.service_year sy2 
+from user_claim_view c1, user_claim_view c2
+where c1.userid = c2.userid 
+and (c2.service_year-c1.service_year = 1) and ((c2.sum_charge_insurance-c1.sum_charge_insurance)>threshold or (c2.avg_charge_insurance-c1.avg_charge_insurance)>threshold);
+
+cursor f_sp_cursor is
+select c1.spid, c2.SUM_CHARGE_INSURANCE-c1.SUM_CHARGE_INSURANCE  diff_sum_insurance, c2.AVG_CHARGE_INSURANCE-c1.AVG_CHARGE_INSURANCE  diff_avg_insurance, c1.service_year sy1, c2.service_year sy2 
+from sp_claim_view c1, sp_claim_view c2
+where c1.spid = c2.spid 
+and (c2.service_year-c1.service_year = 1) and ((c2.sum_charge_insurance-c1.sum_charge_insurance)>threshold or (c2.avg_charge_insurance-c1.avg_charge_insurance)>threshold);
+
+f_row f_cursor%rowtype;
+f_sp_row f_sp_cursor%rowtype;
+
+begin
+dbms_output.put_line('Fraud List');
+open f_cursor;
+if f_cursor%rowcount=0 then
+dbms_output.put_line('No Frauds');
+end if;
+close f_cursor;
+
+if (userorsp=1) then
+
+
+for f_row in f_cursor
+loop
+
+dbms_output.put_line(f_row.userid || ' user ID ' ||f_row.diff_sum_insurance || ' difference in total sum ' || f_row.diff_avg_insurance || ' Average difference ' || f_row.sy1 || ' ' || f_row.sy2 );
+
+end loop;
+
+else
+
+for f_sp_row in f_sp_cursor
+loop
+
+dbms_output.put_line(f_sp_row.spid || ' Provider ID ' ||f_sp_row.diff_sum_insurance || ' difference in total sum ' || f_sp_row.diff_avg_insurance || ' Average difference ' || f_sp_row.sy1 || ' ' || f_sp_row.sy2 );
+
+end loop;
+end if;
+
+end;
+
+set serveroutput on;
+exec fraud_user(1000,1);
+
+update claim set total_charge_insurance=1000 where claimid=1;
+update claim set total_charge_insurance=5000 where claimid=6;
+update claim set total_charge_insurance=8000 where claimid=7;
+update claim set total_chare_insurance=15000 where claimid=8;
+exec fraud_user(1000,0);
